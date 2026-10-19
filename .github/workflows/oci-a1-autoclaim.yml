@@ -111,8 +111,19 @@ jobs:
             if (result.error || result.status !== 0) {
               throw new Error(label + ': denied or unavailable; inspect dedicated OCI bot IAM');
             }
-            try { return JSON.parse(result.stdout); }
-            catch { throw new Error(label + ': invalid OCI JSON'); }
+            const raw = String(result.stdout ?? '');
+            // Only return output metadata on parse failures; never expose OCI
+            // response bodies, raw stderr, identifiers or signing credentials.
+            try { return JSON.parse(raw.replace(/^\\uFEFF/, '')); }
+            catch {
+              const trimmed = raw.trim();
+              const format = trimmed.length === 0 ? 'empty' :
+                /^[\\[{]/.test(trimmed) ? 'JSON-like' : 'non-JSON';
+              const hasAnsi = raw.includes('\\u001b') ? 'yes' : 'no';
+              throw new Error(label + ': CLI exited 0 but output could not be parsed ' +
+                '(format=' + format + ', bytes=' + Buffer.byteLength(raw, 'utf8') +
+                ', lines=' + raw.split('\\n').length + ', ANSI=' + hasAnsi + ')');
+            }
           }
           try {
             const inventory = query(['compute', 'instance', 'list',
