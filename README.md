@@ -1,10 +1,10 @@
-# Mosaic OCI A1 private capacity scheduler
+# Mosaic OCI A1 capacity scheduler
 
-This private GitHub Actions repository is separate from the Mosaic application's protected Production branches. It holds **no Oracle credentials in source control**. Workflow: [OCI A1 capacity claim](.github/workflows/oci-a1-autoclaim.yml).
+This dedicated GitHub Actions repository is separate from the Mosaic application's protected Production branches. It holds **no Oracle credentials in source control**. Its Git history and Actions logs will become public if its visibility is changed. Workflow: [OCI A1 capacity claim](.github/workflows/oci-a1-autoclaim.yml).
 
 ## Current setup status
 
-**Manual capacity plus read-only launch-prerequisites audits verified SUCCESS; the owner reports enabling scheduled polling, but no `schedule` event has yet appeared. VM launching is OFF.** This workflow uses the accepted Mosaic controller commit `6fe15940fae40adc7d4728a6ea26ea6c289314c9`. The safety gate `MOSAIC_OCI_WATCH_ENABLED` is unset by default, so scheduled jobs are skipped until the operator completes secret setup and verifies the first manual report. Manual dispatch is always **observe-only**, even if the launch flag is set.
+**Manual capacity plus read-only launch-prerequisites audits verified SUCCESS; the first two `schedule` events were recorded at 15:01 UTC on October 19, 2026. One completed successfully, reporting `OUT_OF_HOST_CAPACITY`, and one was skipped. VM launching is OFF.** This workflow uses the accepted Mosaic controller commit `6fe15940fae40adc7d4728a6ea26ea6c289314c9`. The safety gate `MOSAIC_OCI_WATCH_ENABLED` is unset by default, so scheduled jobs are skipped until the operator completes secret setup and verifies the first manual report. Manual dispatch is always **observe-only**, even if the launch flag is set.
 
 ## Required Actions secrets (Settings → Secrets and variables → Actions)
 
@@ -26,12 +26,12 @@ Do not put real secret values in a commit, GitHub issue, chat message, screensho
 ## Safe test then enable observe-only schedule
 
 1. Verify the existing `MosaicA1` compartment quota policy is active and enforced (2 A1 OCPU, 12 GiB A1 memory, 50 GiB combined boot/block storage). Inspect Always Free usage and set Oracle budget/alerts.
-2. Install all eight **secrets** in this private repository. Keep `MOSAIC_OCI_AUTOLAUNCH`, `MOSAIC_OCI_FREE_TIER_CONFIRMED`, `MOSAIC_OCI_QUOTA_CONFIRMED`, `MOSAIC_OCI_FAST_POLL` and `MOSAIC_OCI_WATCH_ENABLED` **unset** initially.
+2. Install all eight **secrets** in this dedicated repository. Keep `MOSAIC_OCI_AUTOLAUNCH`, `MOSAIC_OCI_FREE_TIER_CONFIRMED`, `MOSAIC_OCI_QUOTA_CONFIRMED`, `MOSAIC_OCI_FAST_POLL` and `MOSAIC_OCI_WATCH_ENABLED` **unset** initially.
 3. Open **Actions → OCI A1 Always Free capacity claim (private scheduler) → Run workflow** on `main`. Check the advisory result; it cannot create a VM because the controller requires a scheduled event. For a deeper *read-only* IAM, image, subnet, inventory and SSH preflight, enable **audit_launch_prereqs** in the Run workflow form. The audit tests reads only; it cannot prove permission to create a VM or actual billing/quota enforcement.
-4. After a successful observe-only run, set repository **variable** `MOSAIC_OCI_WATCH_ENABLED=true` to allow **30-minute** scheduled monitoring (UTC :18 and :48). This alone **cannot launch a VM**. Check Actions for an actual `schedule` event before claiming unattended operation; GitHub can delay/drop cron runs.
-5. Fast monitoring is optional: setting repository variable `MOSAIC_OCI_FAST_POLL=true` increases the requested cadence to every **5 minutes**. GitHub Free private runners have a shared 2,000-minute monthly allowance; five-minute polling is at least 8,640 minute-rounded runs in 30 days and may cost money. Review GitHub Actions budget and stop-on-budget settings before enabling fast mode.
+4. Keep the repository **variable** `MOSAIC_OCI_WATCH_ENABLED=true` for observe-only scheduled monitoring. It checks at UTC :18 and :48 (**every 30 minutes while private**). This variable alone **cannot launch a VM**.
+5. Following a source/history/log audit, change the repository's visibility to **public** in GitHub Settings → General → Danger Zone → Change repository visibility. The workflow then admits the ten additional cron windows, requesting **every 5 minutes** without private runner-minute charges, if the watch variable remains enabled. The `MOSAIC_OCI_FAST_POLL` variable no longer controls this schedule. Restrict `main` to trusted writers; never execute untrusted PR code with secrets. After conversion, confirm real `schedule` runs. GitHub can delay/drop scheduled events.
 6. VM auto-launch remains separately disabled. Do not enable `MOSAIC_OCI_AUTOLAUNCH=true`, `MOSAIC_OCI_FREE_TIER_CONFIRMED=CONFIRMED`, and `MOSAIC_OCI_QUOTA_CONFIRMED=CONFIRMED` until the owner separately approves the residual billing/launch risk after a verified quota/IAM rehearsal. The controller then attempts at most one 2-OCPU/12-GiB A1 instance with 50-GiB boot, private IP only, no automatic Appwrite setup or retry.
 
-The GitHub cron service is best-effort and may delay/skip jobs; available capacity reports are advisory, not a guaranteed instance allocation.
+The GitHub cron service is best-effort and may delay/skip jobs; available capacity reports are advisory, not a guaranteed instance allocation. Conversion makes historical GitHub Actions logs public. On October 19, 2026, a pattern scan found no obvious credentials in 11 commit patches or 6 available job logs; 8 runs had no artifacts. This is not a guarantee that every sensitive value was absent. Public standard GitHub-hosted runners are free; private standard runners consume quota.
 
 Detailed [Mosaic source runbook](https://github.com/carlers/mosaic-life-tracker/blob/6fe15940fae40adc7d4728a6ea26ea6c289314c9/life-tracker/docs/OCI_GITHUB_A1_AUTOMATION.md). Resume coordination in [issue #975](https://github.com/carlers/mosaic-life-tracker/issues/975).
