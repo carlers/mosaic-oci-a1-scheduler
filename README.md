@@ -4,7 +4,7 @@ This private GitHub Actions repository is separate from the Mosaic application's
 
 ## Current setup status
 
-**Manual capacity check verified successful; scheduled polling is owner-enabled, VM launching is OFF.** This workflow uses the accepted Mosaic controller commit `7ce292b819c85bc87380c24a1a7b54c96ed31cab`. The safety gate `MOSAIC_OCI_WATCH_ENABLED` is unset by default, so scheduled jobs are skipped until the operator completes secret setup and verifies the first manual report. Manual dispatch is always **observe-only**, even if the launch flag is set.
+**Manual capacity check verified successful; scheduled polling is owner-enabled, VM launching is OFF.** This workflow uses the accepted Mosaic controller commit `6fe15940fae40adc7d4728a6ea26ea6c289314c9`. The safety gate `MOSAIC_OCI_WATCH_ENABLED` is unset by default, so scheduled jobs are skipped until the operator completes secret setup and verifies the first manual report. Manual dispatch is always **observe-only**, even if the launch flag is set.
 
 ## Required Actions secrets (Settings → Secrets and variables → Actions)
 
@@ -34,4 +34,4 @@ Do not put real secret values in a commit, GitHub issue, chat message, screensho
 
 The GitHub cron service is best-effort and may delay/skip jobs; available capacity reports are advisory, not a guaranteed instance allocation.
 
-Detailed [Mosaic source runbook](https://github.com/carlers/mosaic-life-tracker/blob/7ce292b819c85bc87380c24a1a7b54c96ed31cab/life-tracker/docs/OCI_GITHUB_A1_AUTOMATION.md). Resume coordination in [issue #975](https://github.com/carlers/mosaic-life-tracker/issues/975).
+Detailed [Mosaic source runbook](https://github.com/carlers/mosaic-life-tracker/blob/6fe15940fae40adc7d4728a6ea26ea6c289314c9/life-tracker/docs/OCI_GITHUB_A1_AUTOMATION.md). Resume coordination in [issue #975](https://github.com/carlers/mosaic-life-tracker/issues/975).

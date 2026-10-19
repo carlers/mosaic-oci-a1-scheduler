@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
-      MOSAIC_CONTROLLER_SHA: 7ce292b819c85bc87380c24a1a7b54c96ed31cab
+      MOSAIC_CONTROLLER_SHA: 6fe15940fae40adc7d4728a6ea26ea6c289314c9
       MOSAIC_OCI_AUTOLAUNCH: ${{ vars.MOSAIC_OCI_AUTOLAUNCH || 'false' }}
       MOSAIC_OCI_COMPARTMENT_OCID: ${{ secrets.MOSAIC_OCI_COMPARTMENT_OCID }}
       MOSAIC_OCI_SUBNET_OCID: ${{ secrets.MOSAIC_OCI_SUBNET_OCID }}
