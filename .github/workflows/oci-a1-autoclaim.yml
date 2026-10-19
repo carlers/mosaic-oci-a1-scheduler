@@ -5,11 +5,12 @@ name: OCI A1 Always Free capacity claim (private scheduler)
 # Scheduled work requires MOSAIC_OCI_WATCH_ENABLED=true; manual observe-only remains available.
 on:
   schedule:
+    # Rescheduled off the old UTC :17/:47 to re-register cron in this new private repo.
     # Sustainable default for GitHub Free private-repository minutes.
-    - cron: '17,47 * * * *'
+    - cron: '18,48 * * * *'
     # Extra checks make total cadence five minutes; disabled by default.
     # Skipping these jobs avoids runner-minute charges when fast mode is off.
-    - cron: '2,7,12,22,27,32,37,42,52,57 * * * *'
+    - cron: '3,8,13,23,28,33,38,43,53,58 * * * *'
   workflow_dispatch:
     inputs:
       audit_launch_prereqs:
@@ -27,7 +28,7 @@ concurrency:
 
 jobs:
   report-or-claim:
-    if: ${{ github.repository == 'carlers/mosaic-oci-a1-scheduler' && github.event.repository.private == true && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.MOSAIC_OCI_WATCH_ENABLED == 'true') && (github.event_name == 'workflow_dispatch' || github.event.schedule == '17,47 * * * *' || vars.MOSAIC_OCI_FAST_POLL == 'true') }}
+    if: ${{ github.repository == 'carlers/mosaic-oci-a1-scheduler' && github.event.repository.private == true && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.MOSAIC_OCI_WATCH_ENABLED == 'true') && (github.event_name == 'workflow_dispatch' || github.event.schedule == '18,48 * * * *' || vars.MOSAIC_OCI_FAST_POLL == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
