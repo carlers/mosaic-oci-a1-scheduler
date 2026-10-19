@@ -11,6 +11,12 @@ on:
     # Skipping these jobs avoids runner-minute charges when fast mode is off.
     - cron: '2,7,12,22,27,32,37,42,52,57 * * * *'
   workflow_dispatch:
+    inputs:
+      audit_launch_prereqs:
+        description: 'Read-only check of image, subnet, inventory and SSH key (never launch)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -88,6 +94,62 @@ jobs:
             printf 'region=ap-singapore-1\n'
           } > "$HOME/.oci/config"
           echo "MOSAIC_OCI_SSH_PUBLIC_KEY_FILE=$RUNNER_TEMP/a1-ssh.pub" >> "$GITHUB_ENV"
+
+      - name: Audit launch prerequisites (read-only manual dispatch only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_launch_prereqs == true }}
+        shell: bash
+        run: |
+          node <<'NODE'
+          const {spawnSync} = require('node:child_process');
+          const {readFileSync} = require('node:fs');
+          const e = process.env;
+          function query(parts, label) {
+            const result = spawnSync('oci', [...parts, '--region', 'ap-singapore-1', '--no-retry', '--output', 'json'], {
+              encoding: 'utf8', timeout: 90000, maxBuffer: 4 * 1024 * 1024,
+              stdio: ['ignore', 'pipe', 'pipe'], shell: false,
+            });
+            if (result.error || result.status !== 0) {
+              throw new Error(label + ': denied or unavailable; inspect dedicated OCI bot IAM');
+            }
+            try { return JSON.parse(result.stdout); }
+            catch { throw new Error(label + ': invalid OCI JSON'); }
+          }
+          try {
+            const inventory = query(['compute', 'instance', 'list',
+              '--compartment-id', e.MOSAIC_OCI_COMPARTMENT_OCID, '--all'], 'A1 inventory');
+            if (!Array.isArray(inventory.data)) throw new Error('A1 inventory: missing list');
+            const existing = inventory.data.some(x => x.shape === 'VM.Standard.A1.Flex');
+            const image = query(['compute', 'image', 'get',
+              '--image-id', e.MOSAIC_OCI_IMAGE_OCID], 'Ubuntu image');
+            const compatible = query(['compute', 'image-shape-compatibility-entry', 'list',
+              '--image-id', e.MOSAIC_OCI_IMAGE_OCID, '--all'], 'A1 image compatibility');
+            const subnet = query(['network', 'subnet', 'get',
+              '--subnet-id', e.MOSAIC_OCI_SUBNET_OCID], 'VCN subnet');
+            const i = image.data ?? {};
+            if (!/ubuntu/i.test(String(i['operating-system'])) ||
+                !String(i['operating-system-version']).startsWith('24.04') ||
+                i['lifecycle-state'] !== 'AVAILABLE' ||
+                !Array.isArray(compatible.data) ||
+                !compatible.data.some(x => x.shape === 'VM.Standard.A1.Flex')) {
+              throw new Error('Selected image is not an AVAILABLE Ubuntu 24.04 A1-compatible image');
+            }
+            if (subnet.data?.id !== e.MOSAIC_OCI_SUBNET_OCID ||
+                subnet.data?.['lifecycle-state'] !== 'AVAILABLE') {
+              throw new Error('Selected subnet is not AVAILABLE');
+            }
+            const pub = readFileSync(e.MOSAIC_OCI_SSH_PUBLIC_KEY_FILE, 'utf8').trim();
+            if (!/^(ssh-ed25519|ssh-rsa) [A-Za-z0-9+/]+={0,3}(?: [^\r\n]*)?$/.test(pub) ||
+                pub.length > 2000) {
+              throw new Error('SSH public key is invalid');
+            }
+            console.log('READ-ONLY PREFLIGHT PASSED: instance inventory, Ubuntu A1 image, subnet and SSH public key');
+            console.log('Existing A1 instance in dedicated compartment: ' + (existing ? 'YES (do not launch another)' : 'NO'));
+            console.log('Not tested: LaunchInstance permission, quota enforcement, public cost classification or billing');
+          } catch (error) {
+            console.error('READ-ONLY PREFLIGHT FAILED: ' + error.message);
+            process.exitCode = 1;
+          }
+          NODE
 
       - name: Check capacity and optionally claim ONE A1 instance
         shell: bash
