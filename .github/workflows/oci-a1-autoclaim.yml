@@ -1,0 +1,114 @@
+name: OCI A1 Always Free capacity claim (private scheduler)
+
+# Place this file ONLY in the private carlers/mosaic-oci-a1-scheduler repo.
+# Replace the controller SHA placeholder before activating; never store OCI signing secrets here.
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mosaic-a1-single-claim
+  cancel-in-progress: false
+
+jobs:
+  report-or-claim:
+    if: ${{ github.repository == 'carlers/mosaic-oci-a1-scheduler' && github.event.repository.private == true && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      MOSAIC_CONTROLLER_SHA: 8a64727d029b373051c22ebc72bf93f59ca80c25
+      MOSAIC_OCI_AUTOLAUNCH: ${{ vars.MOSAIC_OCI_AUTOLAUNCH || 'false' }}
+      MOSAIC_OCI_COMPARTMENT_OCID: ${{ secrets.MOSAIC_OCI_COMPARTMENT_OCID }}
+      MOSAIC_OCI_SUBNET_OCID: ${{ secrets.MOSAIC_OCI_SUBNET_OCID }}
+      MOSAIC_OCI_IMAGE_OCID: ${{ secrets.MOSAIC_OCI_IMAGE_OCID }}
+      MOSAIC_OCI_FREE_TIER_CONFIRMED: ${{ vars.MOSAIC_OCI_FREE_TIER_CONFIRMED || 'NO' }}
+      MOSAIC_OCI_QUOTA_CONFIRMED: ${{ vars.MOSAIC_OCI_QUOTA_CONFIRMED || 'NO' }}
+    steps:
+      - name: Check out reviewed Mosaic controller (immutable SHA)
+        uses: actions/checkout@v4
+        with:
+          repository: carlers/mosaic-life-tracker
+          ref: ${{ env.MOSAIC_CONTROLLER_SHA }}
+          path: mosaic-source
+          persist-credentials: false
+
+      - name: Verify the exact pinned controller commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$MOSAIC_CONTROLLER_SHA" =~ ^[0-9a-f]{40}$ ]] ||
+             [[ "$(git -C mosaic-source rev-parse HEAD)" != "$MOSAIC_CONTROLLER_SHA" ]]; then
+            echo 'Controller SHA is missing or not the checked out revision.'
+            exit 1
+          fi
+
+      - name: Install OCI CLI in a temporary isolated virtual environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m venv "$RUNNER_TEMP/oci-venv"
+          "$RUNNER_TEMP/oci-venv/bin/pip" --disable-pip-version-check install --quiet oci-cli==3.95.0
+          echo "$RUNNER_TEMP/oci-venv/bin" >> "$GITHUB_PATH"
+
+      - name: Configure ephemeral OCI API signing key, without logging identifiers
+        shell: bash
+        env:
+          OCI_TENANCY: ${{ secrets.MOSAIC_OCI_TENANCY_OCID }}
+          OCI_USER: ${{ secrets.MOSAIC_OCI_USER_OCID }}
+          OCI_FINGERPRINT: ${{ secrets.MOSAIC_OCI_FINGERPRINT }}
+          OCI_SIGNING_KEY: ${{ secrets.MOSAIC_OCI_API_KEY_PEM }}
+          OCI_SSH_PUBLIC: ${{ secrets.MOSAIC_OCI_SSH_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          for key in OCI_TENANCY OCI_USER OCI_FINGERPRINT OCI_SIGNING_KEY OCI_SSH_PUBLIC; do
+            if [[ -z "${!key:-}" ]]; then
+              echo 'Missing required secret; no API calls were attempted.'
+              exit 1
+            fi
+          done
+          mkdir -p "$HOME/.oci"
+          printf '%s\n' "$OCI_SIGNING_KEY" > "$HOME/.oci/oci_signing.pem"
+          printf '%s\n' "$OCI_SSH_PUBLIC" > "$RUNNER_TEMP/a1-ssh.pub"
+          {
+            printf '[DEFAULT]\n'
+            printf 'user=%s\n' "$OCI_USER"
+            printf 'tenancy=%s\n' "$OCI_TENANCY"
+            printf 'fingerprint=%s\n' "$OCI_FINGERPRINT"
+            printf 'key_file=%s\n' "$HOME/.oci/oci_signing.pem"
+            printf 'region=ap-singapore-1\n'
+          } > "$HOME/.oci/config"
+          echo "MOSAIC_OCI_SSH_PUBLIC_KEY_FILE=$RUNNER_TEMP/a1-ssh.pub" >> "$GITHUB_ENV"
+
+      - name: Check capacity and optionally claim ONE A1 instance
+        shell: bash
+        run: |
+          set -euo pipefail
+          node mosaic-source/life-tracker/scripts/oci-a1-autoclaim.mjs > "$RUNNER_TEMP/a1-result.json"
+          cat "$RUNNER_TEMP/a1-result.json"
+          cat "$RUNNER_TEMP/a1-result.json" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Explain result and safety boundaries
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo ''
+            echo 'Observes Singapore VM.Standard.A1.Flex 2 OCPU / 12 GB every hour.'
+            echo 'Launch remains off until explicitly enabled and quota/free-tier confirmations provided.'
+            echo 'On success creates a VM with 50 GB boot storage and NO public IP.'
+            echo 'Never installs Appwrite, opens ports or changes Mosaic Production.'
+            echo 'Capacity reports and GitHub cron are best-effort, not guarantees.'
+            echo 'Check OCI Console and billing alerts after any launch.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove temporary signing key and report
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.oci/config" "$HOME/.oci/oci_signing.pem" \
+            "$RUNNER_TEMP/a1-ssh.pub" "$RUNNER_TEMP/a1-result.json"
