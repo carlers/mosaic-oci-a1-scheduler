@@ -114,15 +114,16 @@ jobs:
             const raw = String(result.stdout ?? '');
             // Only return output metadata on parse failures; never expose OCI
             // response bodies, raw stderr, identifiers or signing credentials.
-            try { return JSON.parse(raw.replace(/^\\uFEFF/, '')); }
+            const clean = raw.charCodeAt(0) === 0xFEFF ? raw.slice(1) : raw;
+            try { return JSON.parse(clean); }
             catch {
               const trimmed = raw.trim();
               const format = trimmed.length === 0 ? 'empty' :
-                /^[\\[{]/.test(trimmed) ? 'JSON-like' : 'non-JSON';
-              const hasAnsi = raw.includes('\\u001b') ? 'yes' : 'no';
+                (trimmed.startsWith('{') || trimmed.startsWith('[')) ? 'JSON-like' : 'non-JSON';
+              const hasAnsi = raw.includes(String.fromCharCode(27)) ? 'yes' : 'no';
               throw new Error(label + ': CLI exited 0 but output could not be parsed ' +
                 '(format=' + format + ', bytes=' + Buffer.byteLength(raw, 'utf8') +
-                ', lines=' + raw.split('\\n').length + ', ANSI=' + hasAnsi + ')');
+                ', lines=' + raw.split(String.fromCharCode(10)).length + ', ANSI=' + hasAnsi + ')');
             }
           }
           try {
