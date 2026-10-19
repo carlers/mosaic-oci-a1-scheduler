@@ -1,11 +1,16 @@
 # Temporary #975 diagnostic: confirm GitHub creates schedule events in this
 # newly created private repository. It never starts a runner or contacts OCI.
+# Push event verifies workflow registration; skip-only job requires no runner.
 # Remove after the scheduler's first actual schedule event is verified.
 name: OCI scheduler registration probe (runner-free)
 
 on:
   schedule:
     - cron: '13,28,43,58 * * * *'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/schedule-registration-probe.yml'
   workflow_dispatch:
 
 permissions: {}
