@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   report-or-claim:
-    if: ${{ github.repository == 'carlers/mosaic-oci-a1-scheduler' && github.event.repository.private == true && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.MOSAIC_OCI_WATCH_ENABLED == 'true') && (github.event_name == 'workflow_dispatch' || github.event.schedule == '18,48 * * * *' || vars.MOSAIC_OCI_FAST_POLL == 'true') }}
+    if: ${{ github.repository == 'carlers/mosaic-oci-a1-scheduler' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.MOSAIC_OCI_WATCH_ENABLED == 'true') && (github.event_name == 'workflow_dispatch' || github.event.schedule == '18,48 * * * *' || github.event.repository.private == false) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
