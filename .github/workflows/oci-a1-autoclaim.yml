@@ -1,10 +1,15 @@
 name: OCI A1 Always Free capacity claim (private scheduler)
 
 # Place this file ONLY in the private carlers/mosaic-oci-a1-scheduler repo.
-# Replace the controller SHA placeholder before activating; never store OCI signing secrets here.
+# Pinned to accepted Mosaic controller commit. Never put OCI secrets in this file.
+# Scheduled work requires MOSAIC_OCI_WATCH_ENABLED=true; manual observe-only remains available.
 on:
   schedule:
-    - cron: '17 * * * *'
+    # Sustainable default for GitHub Free private-repository minutes.
+    - cron: '17,47 * * * *'
+    # Extra checks make total cadence five minutes; disabled by default.
+    # Skipping these jobs avoids runner-minute charges when fast mode is off.
+    - cron: '2,7,12,22,27,32,37,42,52,57 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -16,11 +21,11 @@ concurrency:
 
 jobs:
   report-or-claim:
-    if: ${{ github.repository == 'carlers/mosaic-oci-a1-scheduler' && github.event.repository.private == true && github.ref == 'refs/heads/main' }}
+    if: ${{ github.repository == 'carlers/mosaic-oci-a1-scheduler' && github.event.repository.private == true && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || vars.MOSAIC_OCI_WATCH_ENABLED == 'true') && (github.event_name == 'workflow_dispatch' || github.event.schedule == '17,47 * * * *' || vars.MOSAIC_OCI_FAST_POLL == 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
-      MOSAIC_CONTROLLER_SHA: 8a64727d029b373051c22ebc72bf93f59ca80c25
+      MOSAIC_CONTROLLER_SHA: 7ce292b819c85bc87380c24a1a7b54c96ed31cab
       MOSAIC_OCI_AUTOLAUNCH: ${{ vars.MOSAIC_OCI_AUTOLAUNCH || 'false' }}
       MOSAIC_OCI_COMPARTMENT_OCID: ${{ secrets.MOSAIC_OCI_COMPARTMENT_OCID }}
       MOSAIC_OCI_SUBNET_OCID: ${{ secrets.MOSAIC_OCI_SUBNET_OCID }}
@@ -98,7 +103,7 @@ jobs:
         run: |
           {
             echo ''
-            echo 'Observes Singapore VM.Standard.A1.Flex 2 OCPU / 12 GB every hour.'
+            echo 'Observes Singapore VM.Standard.A1.Flex 2 OCPU / 12 GB every 30 minutes (or 5 minutes with MOSAIC_OCI_FAST_POLL=true).'
             echo 'Launch remains off until explicitly enabled and quota/free-tier confirmations provided.'
             echo 'On success creates a VM with 50 GB boot storage and NO public IP.'
             echo 'Never installs Appwrite, opens ports or changes Mosaic Production.'
