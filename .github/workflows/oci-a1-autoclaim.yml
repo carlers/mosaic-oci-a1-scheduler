@@ -127,9 +127,31 @@ jobs:
             }
           }
           try {
-            const inventory = query(['compute', 'instance', 'list',
-              '--compartment-id', e.MOSAIC_OCI_COMPARTMENT_OCID, '--all'], 'A1 inventory');
-            if (!Array.isArray(inventory.data)) throw new Error('A1 inventory: missing list');
+            // OCI CLI 3.95.0 returned exit 0 with empty stdout on the empty
+            // compartment inventory. An empty string MUST NOT imply no VMs.
+            // Ask the pinned OCI Python SDK to return explicit data instead.
+            const inventoryScript = [
+              'import json, os, oci',
+              'config = oci.config.from_file()',
+              'client = oci.core.ComputeClient(config, retry_strategy=oci.retry.NoneRetryStrategy())',
+              'rows = oci.pagination.list_call_get_all_results(client.list_instances,',
+              '    compartment_id=os.environ["MOSAIC_OCI_COMPARTMENT_OCID"]).data',
+              'print(json.dumps({"data": [{"shape": x.shape} for x in rows]}))',
+            ].join(String.fromCharCode(10));
+            const inventoryResult = spawnSync(
+              process.env.RUNNER_TEMP + '/oci-venv/bin/python',
+              ['-c', inventoryScript], {
+                encoding: 'utf8', timeout: 90000, maxBuffer: 4 * 1024 * 1024,
+                stdio: ['ignore', 'pipe', 'pipe'], shell: false,
+              },
+            );
+            if (inventoryResult.error || inventoryResult.status !== 0) {
+              throw new Error('A1 inventory SDK: request failed; inspect dedicated bot IAM');
+            }
+            let inventory;
+            try { inventory = JSON.parse(inventoryResult.stdout); }
+            catch { throw new Error('A1 inventory SDK: invalid JSON'); }
+            if (!Array.isArray(inventory?.data)) throw new Error('A1 inventory SDK: missing list');
             const existing = inventory.data.some(x => x.shape === 'VM.Standard.A1.Flex');
             const image = query(['compute', 'image', 'get',
               '--image-id', e.MOSAIC_OCI_IMAGE_OCID], 'Ubuntu image');
