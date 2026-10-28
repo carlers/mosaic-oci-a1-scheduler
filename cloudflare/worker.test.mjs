@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { test } from 'node:test';
 import worker, { signDispatch } from './src/worker.mjs';
+import { verifiedCloudflareDispatch } from './verify-dispatch.mjs';
 
 const controller = { cron: '*/5 * * * *' };
 const env = { DISPATCH_ENABLED: 'true', GH_ACTIONS_TOKEN: 'test-token',
@@ -65,4 +66,27 @@ test('API rejection is surfaced without leaking secrets or retrying', async () =
       /GitHub workflow dispatch rejected: HTTP 403/);
     assert.equal(calls, 1);
   } finally { globalThis.fetch = oldFetch; }
+});
+
+
+test('GitHub validator authenticates exactly the Worker signing format', async () => {
+  const nonce = 'c'.repeat(32), epoch = String(Math.floor(Date.now() / 1000));
+  const secret = env.MOSAIC_OCI_CRON_HMAC_KEY;
+  const signature = await signDispatch(epoch, nonce, secret);
+  const verified = { EXTERNAL_CRON_ENABLED: 'true', WATCH_ENABLED: 'true',
+    EXTERNAL_CRON_KEY: secret, CRON_EPOCH: epoch, CRON_NONCE: nonce,
+    CRON_SIGNATURE: signature };
+  assert.equal(verifiedCloudflareDispatch(verified), true);
+  for (const delta of [
+    { EXTERNAL_CRON_ENABLED: 'false' }, { WATCH_ENABLED: 'false' },
+    { CRON_NONCE: 'b'.repeat(32) }, { CRON_EPOCH: 'not-a-time' },
+    { CRON_SIGNATURE: '0'.repeat(64) }, { EXTERNAL_CRON_KEY: '' },
+    { CRON_SIGNATURE: 'nothex' },
+  ]) assert.equal(verifiedCloudflareDispatch({ ...verified, ...delta }), false);
+  assert.equal(verifiedCloudflareDispatch(verified,
+    (Number(epoch) + 601) * 1000), false);
+  assert.equal(verifiedCloudflareDispatch(verified,
+    (Number(epoch) - 61) * 1000), false);
+  assert.equal(verifiedCloudflareDispatch(verified,
+    Number(epoch) * 1000), true);
 });
