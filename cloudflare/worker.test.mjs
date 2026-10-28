@@ -14,6 +14,7 @@ test('default disabled path makes no dispatch', async () => {
   globalThis.fetch = () => { throw new Error('disabled worker must not call GitHub'); };
   try {
     await worker.scheduled(controller, { ...env, DISPATCH_ENABLED: 'false' });
+    await worker.scheduled(controller, { ...env, DISPATCH_ENABLED: undefined });
   } finally { globalThis.fetch = oldFetch; }
 });
 
@@ -104,7 +105,7 @@ test('scheduler retains approved controller pin and opt-in HMAC launch gate', ()
   assert.match(workflow, /node scheduler-source\/cloudflare\/verify-dispatch\.mjs/);
   assert.match(workflow, /cron: '18,48 \* \* \* \*'/);
   assert.match(workflow, /cron: '3,8,13,23,28,33,38,43,53,58 \* \* \* \*'/);
-  assert.equal(wrangler.vars.DISPATCH_ENABLED, 'false');
+  assert.equal(Object.hasOwn(wrangler, 'vars'), false);
   assert.equal(wrangler.workers_dev, false);
   assert.deepEqual(wrangler.triggers.crons, ['*/5 * * * *']);
 });
