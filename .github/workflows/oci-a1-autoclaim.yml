@@ -18,6 +18,18 @@ on:
         required: false
         type: boolean
         default: false
+      dispatch_epoch:
+        description: 'Cloudflare signed dispatch timestamp (UTC seconds); manual default is observe-only'
+        required: false
+        type: string
+      dispatch_nonce:
+        description: 'Cloudflare dispatch 16-byte hexadecimal nonce'
+        required: false
+        type: string
+      dispatch_signature:
+        description: 'Cloudflare HMAC-SHA256; must match secret and age gate'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -32,7 +44,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     env:
-      MOSAIC_CONTROLLER_SHA: 5673549e34fc68430f96764c13ce994fb91441dd
+      MOSAIC_CONTROLLER_SHA: 03e5c8dc6a0109d72604ca65582f692ea9978927
       MOSAIC_OCI_AUTOLAUNCH: ${{ vars.MOSAIC_OCI_AUTOLAUNCH || 'false' }}
       MOSAIC_OCI_COMPARTMENT_OCID: ${{ secrets.MOSAIC_OCI_COMPARTMENT_OCID }}
       MOSAIC_OCI_SUBNET_OCID: ${{ secrets.MOSAIC_OCI_SUBNET_OCID }}
@@ -57,6 +69,30 @@ jobs:
             echo 'Controller SHA is missing or not the checked out revision.'
             exit 1
           fi
+
+      - name: Check out exact scheduler authentication source
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_launch_prereqs != true }}
+        uses: actions/checkout@v4
+        with:
+          repository: carlers/mosaic-oci-a1-scheduler
+          ref: ${{ github.sha }}
+          path: scheduler-source
+          persist-credentials: false
+
+      - name: Authenticate opt-in Cloudflare cron dispatch (manual default is observe-only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_launch_prereqs != true }}
+        shell: bash
+        env:
+          EXTERNAL_CRON_KEY: ${{ secrets.MOSAIC_OCI_CRON_HMAC_KEY }}
+          EXTERNAL_CRON_ENABLED: ${{ vars.MOSAIC_OCI_CLOUDFLARE_DISPATCH_ENABLED || 'false' }}
+          WATCH_ENABLED: ${{ vars.MOSAIC_OCI_WATCH_ENABLED || 'false' }}
+          CRON_EPOCH: ${{ inputs.dispatch_epoch }}
+          CRON_NONCE: ${{ inputs.dispatch_nonce }}
+          CRON_SIGNATURE: ${{ inputs.dispatch_signature }}
+        run: |
+          set -euo pipefail
+          test "$(git -C scheduler-source rev-parse HEAD)" = "$GITHUB_SHA"
+          node scheduler-source/cloudflare/verify-dispatch.mjs
 
       - name: Install OCI CLI in a temporary isolated virtual environment
         shell: bash
