@@ -6,7 +6,7 @@ Cloudflare executes only a GitHub `workflow_dispatch` through a narrowly scoped 
 
 ### Acceptance/cutover (operator actions, not performed by committing files)
 
-1. Accept and verify the Mosaic controller source branch, run focused and canonical CI, then update the exact immutable `MOSAIC_CONTROLLER_SHA` pin in this workflow via an independently reviewed change. Until then external dispatches can only observe.
+1. **Controller accepted:** OCI stable Preview `03e5c8dc6a0109d72604ca65582f692ea9978927` passed focused and canonical Quality Gate #40630333455 and has Vercel Preview `dpl_5EjPgTZDvqYR6Y2xJ4cQgP3enTFM` READY. This task PR updates its immutable `MOSAIC_CONTROLLER_SHA` pin. Verify that exact SHA before and after merging this scheduler PR; the new external trigger remains disabled by default.
 2. Create a long random HMAC key and store **only in secret stores** as GitHub Actions repository secret `MOSAIC_OCI_CRON_HMAC_KEY` and Cloudflare Worker secret `MOSAIC_OCI_CRON_HMAC_KEY`. Never commit the value or print it to logs.
 3. Create a fine-grained GitHub token scoped to **this repository only**, repository **Actions: write**, with expiration and rotation. Store it as Cloudflare Worker secret `GH_ACTIONS_TOKEN`. Never use a broad personal token or store GitHub tokens as ordinary Worker variables.
 4. From `cloudflare/`, run `npx wrangler deploy` using the owner's authorized Cloudflare session. The committed `DISPATCH_ENABLED=false` makes initial deploy dormant; `workers_dev=false` disables an HTTP endpoint. Run `node --test cloudflare/worker.test.mjs` from repo root first.

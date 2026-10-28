@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createHmac } from 'node:crypto';
 import { test } from 'node:test';
 import worker, { signDispatch } from './src/worker.mjs';
@@ -89,4 +90,21 @@ test('GitHub validator authenticates exactly the Worker signing format', async (
     (Number(epoch) - 61) * 1000), false);
   assert.equal(verifiedCloudflareDispatch(verified,
     Number(epoch) * 1000), true);
+});
+
+test('scheduler retains approved controller pin and opt-in HMAC launch gate', () => {
+  const workflow = readFileSync(
+    new URL('../.github/workflows/oci-a1-autoclaim.yml', import.meta.url), 'utf8');
+  const wrangler = JSON.parse(readFileSync(
+    new URL('./wrangler.jsonc', import.meta.url), 'utf8'));
+  assert.match(workflow, /MOSAIC_CONTROLLER_SHA: 03e5c8dc6a0109d72604ca65582f692ea9978927/);
+  assert.match(workflow, /MOSAIC_OCI_CLOUDFLARE_DISPATCH_ENABLED/);
+  assert.match(workflow, /MOSAIC_OCI_CRON_HMAC_KEY/);
+  assert.match(workflow, /github\.event_name == 'workflow_dispatch'/);
+  assert.match(workflow, /node scheduler-source\/cloudflare\/verify-dispatch\.mjs/);
+  assert.match(workflow, /cron: '18,48 \* \* \* \*'/);
+  assert.match(workflow, /cron: '3,8,13,23,28,33,38,43,53,58 \* \* \* \*'/);
+  assert.equal(wrangler.vars.DISPATCH_ENABLED, 'false');
+  assert.equal(wrangler.workers_dev, false);
+  assert.deepEqual(wrangler.triggers.crons, ['*/5 * * * *']);
 });
