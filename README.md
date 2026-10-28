@@ -1,3 +1,20 @@
+## Cloudflare cron dispatch candidate (NOT ACTIVE, October 28, 2026)
+
+The five-minute GitHub cron has been highly unreliable (10 recorded schedule runs on October 27 versus 288 nominal). This repo stages an alternative Cloudflare Worker under `cloudflare/`, with `*/5 * * * *` UTC cron and no public HTTP route. **No Worker is deployed or enabled by this source-only branch.** The current GitHub native schedule remains unchanged until independently verified cutover.
+
+Cloudflare executes only a GitHub `workflow_dispatch` through a narrowly scoped **fine-grained token with Actions:write on this dedicated repository only**. It does not contain Oracle credentials. The Worker signs an epoch timestamp + 16-byte nonce using a shared random HMAC-SHA256 key; GitHub verifies the signature, requires `MOSAIC_OCI_WATCH_ENABLED=true` and an independent `MOSAIC_OCI_CLOUDFLARE_DISPATCH_ENABLED=true` variable, and rejects expired, future, missing or invalid signatures. Only the exact accepted controller SHA supporting `MOSAIC_OCI_EXTERNAL_CRON_VERIFIED=true` can attempt a claim. Unsigned manual dispatch, including `audit_launch_prereqs`, remains observe-only. Existing `MOSAIC_OCI_AUTOLAUNCH`, Always Free and quota confirmation checks, fixed 2 OCPU/12 GiB/50 GiB, one-instance guard, private IP and no-retry controls stay mandatory. This time-bounded signature is not a durable replay store; protect the limited GitHub token and shared HMAC key and rotate them on compromise.
+
+### Acceptance/cutover (operator actions, not performed by committing files)
+
+1. Accept and verify the Mosaic controller source branch, run focused and canonical CI, then update the exact immutable `MOSAIC_CONTROLLER_SHA` pin in this workflow via an independently reviewed change. Until then external dispatches can only observe.
+2. Create a long random HMAC key and store **only in secret stores** as GitHub Actions repository secret `MOSAIC_OCI_CRON_HMAC_KEY` and Cloudflare Worker secret `MOSAIC_OCI_CRON_HMAC_KEY`. Never commit the value or print it to logs.
+3. Create a fine-grained GitHub token scoped to **this repository only**, repository **Actions: write**, with expiration and rotation. Store it as Cloudflare Worker secret `GH_ACTIONS_TOKEN`. Never use a broad personal token or store GitHub tokens as ordinary Worker variables.
+4. From `cloudflare/`, run `npx wrangler deploy` using the owner's authorized Cloudflare session. The committed `DISPATCH_ENABLED=false` makes initial deploy dormant; `workers_dev=false` disables an HTTP endpoint. Run `node --test cloudflare/worker.test.mjs` from repo root first.
+5. After source pin, secrets and read-only verification are complete, explicitly enable GitHub repository variables `MOSAIC_OCI_CLOUDFLARE_DISPATCH_ENABLED=true`, `MOSAIC_OCI_WATCH_ENABLED=true` and Cloudflare Worker variable `DISPATCH_ENABLED=true`. Check at least several GitHub `workflow_dispatch` records, authentication step and OCI report results. If the server is claimed, disable both scheduler triggers and verify cloud resources and billing immediately.
+6. Only after demonstrated cadence, remove the old GitHub cron using a reviewed deployment (retain manual observe-only dispatch) to avoid duplicate schedules. GitHub 204 dispatch success is not evidence of a completed execution. Detect missed dispatches and failed jobs by independent monitoring; Cloudflare cron and GitHub runners are also best-effort. Do not change Production.
+   
+---
+
 # Mosaic OCI A1 capacity scheduler
 
 This dedicated GitHub Actions repository is separate from the Mosaic application's protected Production branches. It holds **no Oracle credentials in source control**. Its Git history and Actions logs will become public if its visibility is changed. Workflow: [OCI A1 capacity claim](.github/workflows/oci-a1-autoclaim.yml).

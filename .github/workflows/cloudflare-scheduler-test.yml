@@ -1,0 +1,20 @@
+name: Cloudflare scheduler source checks
+on:
+  pull_request:
+  push:
+    branches:
+      - 'chatgpt/975-cloudflare-five-minute-20261028'
+permissions:
+  contents: read
+jobs:
+  worker-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Run signed-dispatch, fail-closed and API failure tests
+        run: node --test cloudflare/worker.test.mjs

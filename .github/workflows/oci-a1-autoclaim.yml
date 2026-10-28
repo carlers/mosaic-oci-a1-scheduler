@@ -18,6 +18,18 @@ on:
         required: false
         type: boolean
         default: false
+      dispatch_epoch:
+        description: 'Cloudflare signed dispatch timestamp (UTC seconds); manual default is observe-only'
+        required: false
+        type: string
+      dispatch_nonce:
+        description: 'Cloudflare dispatch 16-byte hexadecimal nonce'
+        required: false
+        type: string
+      dispatch_signature:
+        description: 'Cloudflare HMAC-SHA256; must match secret and age gate'
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -57,6 +69,44 @@ jobs:
             echo 'Controller SHA is missing or not the checked out revision.'
             exit 1
           fi
+
+      - name: Authenticate opt-in Cloudflare cron dispatch (manual default is observe-only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_launch_prereqs != true }}
+        shell: bash
+        env:
+          EXTERNAL_CRON_KEY: ${{ secrets.MOSAIC_OCI_CRON_HMAC_KEY }}
+          EXTERNAL_CRON_ENABLED: ${{ vars.MOSAIC_OCI_CLOUDFLARE_DISPATCH_ENABLED || 'false' }}
+          WATCH_ENABLED: ${{ vars.MOSAIC_OCI_WATCH_ENABLED || 'false' }}
+          CRON_EPOCH: ${{ inputs.dispatch_epoch }}
+          CRON_NONCE: ${{ inputs.dispatch_nonce }}
+          CRON_SIGNATURE: ${{ inputs.dispatch_signature }}
+        run: |
+          node <<'NODE'
+          const { createHmac, timingSafeEqual } = require('node:crypto');
+          const { appendFileSync } = require('node:fs');
+          const e = process.env;
+          // Fail closed. No inputs or manual UI audit may grant launch permission.
+          const eligible = e.EXTERNAL_CRON_ENABLED === 'true' && e.WATCH_ENABLED === 'true' &&
+            e.EXTERNAL_CRON_KEY && /^[0-9]{10}$/.test(e.CRON_EPOCH || '') &&
+            /^[0-9a-f]{32}$/.test(e.CRON_NONCE || '') &&
+            /^[0-9a-f]{64}$/.test(e.CRON_SIGNATURE || '');
+          const age = Date.now() / 1000 - Number(e.CRON_EPOCH);
+          if (!eligible || !Number.isFinite(age) || age < -60 || age > 600) {
+            console.log('External cron absent, disabled or stale: manual observe-only');
+            process.exit(0);
+          }
+          const payload = 'mosaic-oci-a1-scheduler/main/oci-a1-autoclaim.yml:' +
+            e.CRON_EPOCH + ':' + e.CRON_NONCE;
+          const expected = createHmac('sha256', e.EXTERNAL_CRON_KEY)
+            .update(payload).digest();
+          const provided = Buffer.from(e.CRON_SIGNATURE, 'hex');
+          if (provided.length !== expected.length || !timingSafeEqual(expected, provided)) {
+            console.log('External cron HMAC verification failed: manual observe-only');
+            process.exit(0);
+          }
+          appendFileSync(e.GITHUB_ENV, 'MOSAIC_OCI_EXTERNAL_CRON_VERIFIED=true\n');
+          console.log('Time-bounded external cron authentication succeeded');
+          NODE
 
       - name: Install OCI CLI in a temporary isolated virtual environment
         shell: bash
