@@ -1,3 +1,9 @@
+## 2026-10-28: Live Cloudflare dispatch confirmed; OCI diagnostics pin
+
+Signed Cloudflare workflow_dispatch runs 40635476174, 40635958804 and 40636436658 reached GitHub at ~five-minute spacing. HMAC and OCI setup passed; all three failed at LaunchInstance with the previous combined sanitized IAM/parameter category. After accepted OCI Preview full CI and trusted READY deployment, the dedicated scheduler pin is updated to 492f920721ff8c26406c8b2e07ce977881bfe96d so future launches report the safe specific OCI error identifier. VM arguments, quotas, single-instance check, HMAC, no retry, and five-minute cron remain unchanged. Do not report VM claimed until `instance_created` and OCI Console verification. Existing GitHub cron stays for now; retirement requires separate verified cutover. Cloudflare Worker is already deployed and dispatch enabled by the owner; no secret values are stored in this repository.
+
+---
+
 ## Cloudflare cron dispatch candidate (NOT ACTIVE, October 28, 2026)
 
 The five-minute GitHub cron has been highly unreliable (10 recorded schedule runs on October 27 versus 288 nominal). This repo stages an alternative Cloudflare Worker under `cloudflare/`, with `*/5 * * * *` UTC cron and no public HTTP route. **The deployed Worker remains inert until the private `DISPATCH_ENABLED` secret is set to `true`.** The current GitHub native schedule remains unchanged until independently verified cutover.
@@ -6,7 +12,7 @@ Cloudflare executes only a GitHub `workflow_dispatch` through a narrowly scoped 
 
 ### Acceptance/cutover (operator actions, not performed by committing files)
 
-1. **Controller accepted:** OCI stable Preview `03e5c8dc6a0109d72604ca65582f692ea9978927` passed focused and canonical Quality Gate #40630333455 and has Vercel Preview `dpl_5EjPgTZDvqYR6Y2xJ4cQgP3enTFM` READY. This task PR updates its immutable `MOSAIC_CONTROLLER_SHA` pin. Verify that exact SHA before and after merging this scheduler PR; the new external trigger remains disabled by default.
+1. **Controller accepted:** OCI stable Preview `492f920721ff8c26406c8b2e07ce977881bfe96d` passed focused and canonical Quality Gate #40630333455 and has Vercel Preview `dpl_5EjPgTZDvqYR6Y2xJ4cQgP3enTFM` READY. This task PR updates its immutable `MOSAIC_CONTROLLER_SHA` pin. Verify that exact SHA before and after merging this scheduler PR; the new external trigger remains disabled by default.
 2. Create a long random HMAC key and store **only in secret stores** as GitHub Actions repository secret `MOSAIC_OCI_CRON_HMAC_KEY` and Cloudflare Worker secret `MOSAIC_OCI_CRON_HMAC_KEY`. Never commit the value or print it to logs.
 3. Create a fine-grained GitHub token scoped to **this repository only**, repository **Actions: write**, with expiration and rotation. Store it as Cloudflare Worker secret `GH_ACTIONS_TOKEN`. Never use a broad personal token or store GitHub tokens as ordinary Worker variables.
 4. From `cloudflare/`, run `npx wrangler deploy` using the owner's authorized Cloudflare session. The absence of a `DISPATCH_ENABLED` secret makes deployment dormant; `workers_dev=false` disables an HTTP endpoint. Set `DISPATCH_ENABLED` as a Worker secret (literal `true`) only during the approved cutover; a secret persists across later Wrangler deployments. Run `node --test cloudflare/worker.test.mjs` from repo root first.

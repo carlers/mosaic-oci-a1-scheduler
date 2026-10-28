@@ -98,7 +98,7 @@ test('scheduler retains approved controller pin and opt-in HMAC launch gate', ()
     new URL('../.github/workflows/oci-a1-autoclaim.yml', import.meta.url), 'utf8');
   const wrangler = JSON.parse(readFileSync(
     new URL('./wrangler.jsonc', import.meta.url), 'utf8'));
-  assert.match(workflow, /MOSAIC_CONTROLLER_SHA: 03e5c8dc6a0109d72604ca65582f692ea9978927/);
+  assert.match(workflow, /MOSAIC_CONTROLLER_SHA: 492f920721ff8c26406c8b2e07ce977881bfe96d/);
   assert.match(workflow, /MOSAIC_OCI_CLOUDFLARE_DISPATCH_ENABLED/);
   assert.match(workflow, /MOSAIC_OCI_CRON_HMAC_KEY/);
   assert.match(workflow, /github\.event_name == 'workflow_dispatch'/);
